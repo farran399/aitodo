@@ -1,58 +1,32 @@
 import './App.css';
-import { useEffect, useState, useRef } from 'react';
-import axios from 'axios';
+import { useState, useRef } from 'react';
+import Chart from './chart';  // 导入已有的 chart 组件
 import { motion, AnimatePresence } from 'framer-motion'; // 导入 Framer Motion 动画库的组件
 
 function App() {
   // 状态管理
-  const [data, setData] = useState(''); // 改为字符串类型，用于存储流式数据
   const [isLoading, setIsLoading] = useState(false); // 控制加载状态
   const [searchText, setSearchText] = useState(''); // 输入框的文本内容
   const [showResult, setShowResult] = useState(false); // 控制结果和动画的显示状态
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true); // 控制是否自动滚动
   const resultRef = useRef(null); // 结果容器的引用
-
-  // 自动滚动到底部的函数
-  const scrollToBottom = () => {
-    if (resultRef.current && shouldAutoScroll) {
-      resultRef.current.scrollTop = resultRef.current.scrollHeight;
-    }
-  };
-
-  // 监听数据变化，自动滚动到底部
-  useEffect(() => {
-    scrollToBottom();
-  }, [data]);
-
-  // 处理用户滚动事件
-  const handleScroll = (e) => {
-    const element = e.target;
-    const isScrolledToBottom = 
-      Math.abs(element.scrollHeight - element.scrollTop - element.clientHeight) < 10;
-    
-    // 只有当用户主动向上滚动时才禁用自动滚动
-    if (!isScrolledToBottom && shouldAutoScroll) {
-      setShouldAutoScroll(false);
-    }
-    
-    // 当用户手动滚动到底部时重新启用自动滚动
-    if (isScrolledToBottom && !shouldAutoScroll) {
-      setShouldAutoScroll(true);
-    }
-  };
+  const [charts, setCharts] = useState([]); // 用于存储图表组件列表
+  const [accumulatedData, setAccumulatedData] = useState('');
+  const accumulatedDataRef = useRef(''); // 添加 ref 来实时追踪数据
+  const leftBrace = useRef(0);
+  const [graphing, setGraphing] = useState(false);
+  const [data, setData] = useState(''); // 改为字符串类型，用于存储流式数据
 
   // 处理搜索按钮点击事件
   const handleSearch = async () => {
     setIsLoading(true); // 开始加载
     setShowResult(true); // 触发动画和结果显示
-    setData(''); // 清空之前的数据
-    setShouldAutoScroll(true); // 重置自动滚动状态
-
+    setData('') // 清空之前的数据
+    accumulatedDataRef.current = ''
     try {
       // 创建响应解码器
       const decoder = new TextDecoder();
-      
-      const response = await fetch('http://localhost:5000/api/judge', {
+
+      const response = await fetch('http://localhost:5000/api/achieve', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -63,22 +37,112 @@ function App() {
 
       // 获取响应的可读流
       const reader = response.body.getReader();
-      
+
       // 循环读取数据流
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        
+        if (done) {
+          break;
+        }
         // 将接收到的数据块解码为文本
         const chunk = decoder.decode(value, { stream: true });
-        
+
         // 更新显示的数据
-        setData(prevData => prevData + chunk);
+        handleDataUpdate(chunk);
       }
     } catch (err) {
       console.error('请求错误:', err);
       setData('发生错误: ' + err.message);
-    } 
+    }
+  };
+
+  //数据处理函数
+  const handleDataUpdate = (newData) => {
+    let startIndex = data.length;
+    // 开始读图表json
+    if(newData.match(/{/g).length>0){
+      leftBrace.current += newData.match(/{/g).length;
+      setGraphing(true);
+    }
+    // 结束读图表json
+    if(newData.match(/}/g).length>0){
+      leftBrace.current -= newData.match(/}/g).length;
+      if(leftBrace.current==0){
+        setGraphing(false);
+      }
+    }
+    // 使用 ref 来实时更新和访问数据
+    accumulatedDataRef.current += newData;
+    setAccumulatedData(accumulatedDataRef.current);
+
+    // 检查是否包含完整的图表数据
+    const checkAndExtractChart = (data) => {
+      let startIndex = data.indexOf('AAAAA');
+      if (startIndex === -1) return null;
+
+      let endIndex = data.indexOf('BBBBB', startIndex);
+      if (endIndex === -1) return null;
+
+      // 提取AAAA和BBBB之间的内容
+      let chartData = data.substring(startIndex + 4, endIndex);
+
+      // 预处理图表数据
+      const processChartData = (rawData) => {
+        // 找到第一个 { 和最后一个 } 的位置
+        const firstBrace = rawData.indexOf('{');
+        const lastBrace = rawData.lastIndexOf('}');
+
+        if (firstBrace === -1 || lastBrace === -1) {
+          console.error('图表数据格式错误：未找到完整的JSON对象');
+          return null;
+        }
+
+        // 只保留 {} 之间的内容
+        return rawData.substring(firstBrace, lastBrace + 1);
+      };
+
+      const processedData = processChartData(chartData);
+      if (!processedData) return null;
+
+      console.log('处理后的图表数据:', processedData);
+
+      return {
+        chartData: processedData,
+        remainingText: data.substring(0, startIndex) + data.substring(endIndex + 4)
+      };
+    };
+
+    const extraction = checkAndExtractChart(accumulatedDataRef.current);
+
+    if (extraction) {
+      try {
+        // 解析预处理后的图表数据
+
+        console.log('当前的数据长度:', extraction.chartData.length);
+        console.log('当前的数据:', extraction.chartData);
+        const parsedChartData = JSON.parse(extraction.chartData);
+
+        // 添加新的图表
+        // setCharts(prevCharts => [...prevCharts, {
+        //   id: Date.now(),
+        //   options: parsedChartData
+        // }]);
+        setCharts([{id: Date.now(),
+             options: parsedChartData}])
+
+        // 更新文本和累积数据
+        setData(prevData => prevData + extraction.remainingText);
+        accumulatedDataRef.current = extraction.remainingText;
+        setAccumulatedData(extraction.remainingText);
+      } catch (e) {
+        console.error('图表数据解析失败:', e);
+        console.error('待解析的数据:', extraction.chartData);
+        setData(prevData => prevData + newData);
+      }
+    } else {
+      // 如果没有完整的图表数据，就更新显示文本
+        setData(prevData => prevData + newData);
+    }
   };
 
   // 搜索框容器的动画配置
@@ -156,7 +220,7 @@ function App() {
         {/* 标题动画组件 */}
         <motion.h1
           className="title"
-          data-text="AI to DO"
+          data-text="AItoDO"
           variants={titleVariants}
           initial="initial"
           animate={showResult ? "animate" : "initial"}
@@ -170,12 +234,25 @@ function App() {
           initial="initial"
           animate={showResult ? "animate" : "initial"}
         >
-          <input
+          <motion.input
             type="text"
-            className="search-input"
-            placeholder="输入内容..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchText !== '') {
+                e.preventDefault(); // 防止默认行为
+                handleSearch();
+              }
+            }}
+            className="search-input"
+            placeholder="输入您的问题..."
+            style={{
+              padding: '10px',
+              border: '1px solid #ccc',
+              borderRadius: '5px',
+              width: '100%',
+              boxSizing: 'border-box'
+            }}
           />
           <button className="magic-button" onClick={handleSearch}>
             <span className="magic-wand">✨</span>
@@ -227,7 +304,6 @@ function App() {
                 animate="animate"
                 exit="exit"
                 className="result-text"
-                onScroll={handleScroll}
                 style={{
                   padding: '20px',
                   color: '#fff',
@@ -249,6 +325,11 @@ function App() {
                 }}
               >
                 {data}
+                {charts.map(chart => (
+                  <div key={chart.id} style={{ margin: '20px 0' }}>
+                    <Chart options={chart.options} />
+                  </div>
+                ))}
               </motion.div>
             )}
           </motion.div>

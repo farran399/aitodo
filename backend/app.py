@@ -8,19 +8,19 @@ client = Ark(
     base_url="https://ark.cn-beijing.volces.com/api/v3")
 
 # flask部分
-from flask import Flask, jsonify,Response,request
+from flask import Flask, jsonify,Response,request,session
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)  # 全局启用跨域支持
 
-# @app.route('/api/achieve', methods=['POST'])
-def how_to_achieve(wish,judge):
+@app.route('/api/achieve', methods=['POST'])
+def how_to_achieve():
     try:
         # 尝试获取 JSON 格式的数据
-        data = request.get_json()
-        if data and 'content' in data:
-            input = data['content']
+        dialog = request.get_json()
+        if dialog and 'content' in dialog:
+            input = dialog['content']
         
         if not input:
             return jsonify({'error': '没有接收到content数据'}), 400
@@ -31,8 +31,8 @@ def how_to_achieve(wish,judge):
             stream = client.chat.completions.create(
                 model="ep-20250314182101-klj96",
                 messages=[
-                    {"role": "system", "content": judge},
-                    {"role": "user", "content": wish},
+                    {"role": "system", "content": description.v1},
+                    {"role": "user", "content": input},
                 ],
                 stream=True
             )
@@ -40,8 +40,8 @@ def how_to_achieve(wish,judge):
                 if not chunk.choices:
                     continue
                 # 检查并只返回非None的reasoning_content
-                if chunk.choices[0].delta.reasoning_content is not None:
-                    yield f"{chunk.choices[0].delta.reasoning_content}"
+                # if chunk.choices[0].delta.reasoning_content is not None:
+                #     yield f"{chunk.choices[0].delta.reasoning_content}"
                 # else:
                 #     if not reason_end:
                 #         yield f"REASONEND"
@@ -51,37 +51,6 @@ def how_to_achieve(wish,judge):
                     yield f"{chunk.choices[0].delta.content}"
                 
         return Response(generate(), mimetype='text/plain')
-    except Exception as e:
-        return jsonify({'error': f'处理请求时发生错误: {str(e)}'}), 500
-
-@app.route('/api/judge', methods=['POST'])
-def judge():
-    try:
-        data = request.get_json()
-        if data and 'content' in data:
-            input = data['content']
-        if not input:
-            return jsonify({'error': '没有接收到content数据'}), 400
-        
-        completion = client.chat.completions.create(
-                model="deepseek-v3-241226",
-                messages=[
-                    {"role": "system", "content": description.v3},
-                    {"role": "user", "content": input},
-                ]
-            )
-        # 获取判断结果
-        judgement = completion.choices[0].message.content
-        # 根据判断结果选择不同的prompt
-        if judgement == "YES":
-            return how_to_achieve(input,description.v1_yes)
-        elif judgement == "NO":
-            return how_to_achieve(input,description.v1_no)
-        elif judgement == "UNDEFINE":
-            return how_to_achieve(input,description.v1_undefine)
-        
-        return jsonify({'result': completion.choices[0].message.content}), 200
-    
     except Exception as e:
         return jsonify({'error': f'处理请求时发生错误: {str(e)}'}), 500
 
