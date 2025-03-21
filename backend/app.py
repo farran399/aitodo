@@ -1,5 +1,4 @@
 # api部分
-import os
 import description
 from volcenginesdkarkruntime import Ark
 
@@ -8,7 +7,7 @@ client = Ark(
     base_url="https://ark.cn-beijing.volces.com/api/v3")
 
 # flask部分
-from flask import Flask, jsonify,Response,request,session
+from flask import Flask, jsonify,Response,request
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -27,7 +26,7 @@ def how_to_achieve():
             
         # 流式响应
         def generate():
-            # 使用deepseek-r1-250120模型动态生成
+            # 使用模型deepseek-v3-241226动态生成
             stream = client.chat.completions.create(
                 model="ep-20250314182101-klj96",
                 messages=[
@@ -40,17 +39,23 @@ def how_to_achieve():
                 if not chunk.choices:
                     continue
                 # 检查并只返回非None的reasoning_content
-                # if chunk.choices[0].delta.reasoning_content is not None:
-                #     yield f"{chunk.choices[0].delta.reasoning_content}"
+                if (chunk.choices[0].delta.reasoning_content is not None) and (chunk.choices[0].delta.reasoning_content != ''):
+                    chunkContent = (chunk.choices[0].delta.reasoning_content).replace('\\','\\\\')
+                    chunkContent = chunkContent.replace('\n', '\\n')
+                    chunkContent = chunkContent.replace('"', '\\"')
+                    yield '''{"content":"%s","type":0}\n'''% chunkContent
                 # else:
                 #     if not reason_end:
                 #         yield f"REASONEND"
                 #     reason_end = True
                 # 检查并只返回非None的content
-                if chunk.choices[0].delta.content is not None:
-                    yield f"{chunk.choices[0].delta.content}"
+                if (chunk.choices[0].delta.content is not None) and (chunk.choices[0].delta.content != ''):
+                    chunkContent = (chunk.choices[0].delta.content).replace('\\','\\\\')
+                    chunkContent = chunkContent.replace('\n', '\\n')
+                    chunkContent = chunkContent.replace('"', '\\"')
+                    yield '''{"content":"%s","type":1}\n'''% chunkContent
                 
-        return Response(generate(), mimetype='text/plain')
+        return Response(generate(), mimetype='application/json')
     except Exception as e:
         return jsonify({'error': f'处理请求时发生错误: {str(e)}'}), 500
 

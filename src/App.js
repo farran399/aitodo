@@ -8,20 +8,22 @@ function App() {
   const [isLoading, setIsLoading] = useState(false); // 控制加载状态
   const [searchText, setSearchText] = useState(''); // 输入框的文本内容
   const [showResult, setShowResult] = useState(false); // 控制结果和动画的显示状态
-  const resultRef = useRef(null); // 结果容器的引用
   const [charts, setCharts] = useState([]); // 用于存储图表组件列表
-  const [accumulatedData, setAccumulatedData] = useState('');
-  const accumulatedDataRef = useRef(''); // 添加 ref 来实时追踪数据
-  const leftBrace = useRef(0);
-  const [graphing, setGraphing] = useState(false);
-  const [data, setData] = useState(''); // 改为字符串类型，用于存储流式数据
+  const isReasoning = useRef(true);//推理数据
+  const graphData = useRef('');//图表数据
+  const leftBrace = useRef(0);//左大括号数量
+  const graphing = useRef(false);//是否正在读取图表数据
+  const [content, setContent] = useState(''); // 改为字符串类型，用于存储流式数据
+  const [reasoning, setReasoning] = useState(''); // 改为字符串类型，用于存储流式数据
 
   // 处理搜索按钮点击事件
   const handleSearch = async () => {
+    isReasoning.current = true;
     setIsLoading(true); // 开始加载
     setShowResult(true); // 触发动画和结果显示
-    setData('') // 清空之前的数据
-    accumulatedDataRef.current = ''
+    setContent('') // 清空之前的数据
+    setReasoning('') // 清空之前的数据
+    graphData.current = ''
     try {
       // 创建响应解码器
       const decoder = new TextDecoder();
@@ -33,7 +35,6 @@ function App() {
         },
         body: JSON.stringify({ content: searchText })
       });
-      setIsLoading(false);// 结束加载状态
 
       // 获取响应的可读流
       const reader = response.body.getReader();
@@ -45,103 +46,91 @@ function App() {
           break;
         }
         // 将接收到的数据块解码为文本
-        const chunk = decoder.decode(value, { stream: true });
-
-        // 更新显示的数据
-        handleDataUpdate(chunk);
+        try {
+          let decodedValue=decoder.decode(value, { stream: true })
+          let partValue  = '';
+          // 拆分读取数据流
+          while (decodedValue.indexOf('}\n{') !== -1) {
+            partValue = decodedValue.substring(0, decodedValue.indexOf('}\n{')+1);
+            // 更新显示的数据
+            handleDataUpdate(partValue);
+            decodedValue = decodedValue.substring(decodedValue.indexOf('}\n{') + 2);
+          }
+          partValue = decodedValue;
+          handleDataUpdate(partValue);
+        } catch (e) {
+          console.error('数据解析错误:', e);
+          console.error('待解析的数据:', decoder.decode(value, { stream: true }));
+        }
       }
     } catch (err) {
       console.error('请求错误:', err);
-      setData('发生错误: ' + err.message);
     }
   };
 
   //数据处理函数
-  const handleDataUpdate = (newData) => {
-    let startIndex = data.length;
-    // 开始读图表json
-    if(newData.match(/{/g).length>0){
-      leftBrace.current += newData.match(/{/g).length;
-      setGraphing(true);
+  const handleDataUpdate = (value) => {
+    let reciveData = JSON.parse(value);
+    let newData = reciveData.content;
+    let type = reciveData.type;
+    if (type === 1) {
+      isReasoning.current = false;
     }
-    // 结束读图表json
-    if(newData.match(/}/g).length>0){
-      leftBrace.current -= newData.match(/}/g).length;
-      if(leftBrace.current==0){
-        setGraphing(false);
+    // 开始读图表json
+    if (!isReasoning.current && newData.match('{') && newData.match("{").length > 0) {
+      leftBrace.current += newData.match("{").length;
+      graphing.current = true;
+      setIsLoading(true)
+    }
+    if (graphing.current) {
+      if (leftBrace.current > 0) {
+        graphData.current += newData;
+        console.log(graphData.current);
+      }
+    } else {
+      setIsLoading(false);// 结束加载状态
+      if (isReasoning.current) {
+        setReasoning(prevData => prevData + newData);
+      } else {
+        setContent(prevData => prevData + newData);
       }
     }
-    // 使用 ref 来实时更新和访问数据
-    accumulatedDataRef.current += newData;
-    setAccumulatedData(accumulatedDataRef.current);
+    // 结束读图表json
+    if (!isReasoning.current && newData.match('}') && newData.match('}').length > 0) {
+      leftBrace.current -= newData.match('}').length;
+      if (leftBrace.current === 0) {
+        graphing.current = false;
 
-    // 检查是否包含完整的图表数据
-    const checkAndExtractChart = (data) => {
-      let startIndex = data.indexOf('AAAAA');
-      if (startIndex === -1) return null;
-
-      let endIndex = data.indexOf('BBBBB', startIndex);
-      if (endIndex === -1) return null;
-
-      // 提取AAAA和BBBB之间的内容
-      let chartData = data.substring(startIndex + 4, endIndex);
-
-      // 预处理图表数据
-      const processChartData = (rawData) => {
         // 找到第一个 { 和最后一个 } 的位置
-        const firstBrace = rawData.indexOf('{');
-        const lastBrace = rawData.lastIndexOf('}');
+        const firstBrace = graphData.current.indexOf('{');
+        const lastBrace = graphData.current.lastIndexOf('}');
 
         if (firstBrace === -1 || lastBrace === -1) {
           console.error('图表数据格式错误：未找到完整的JSON对象');
+          console.error('图表数据:', graphData.current);
           return null;
         }
+        graphData.current = graphData.current.substring(firstBrace, lastBrace + 1);
 
-        // 只保留 {} 之间的内容
-        return rawData.substring(firstBrace, lastBrace + 1);
-      };
-
-      const processedData = processChartData(chartData);
-      if (!processedData) return null;
-
-      console.log('处理后的图表数据:', processedData);
-
-      return {
-        chartData: processedData,
-        remainingText: data.substring(0, startIndex) + data.substring(endIndex + 4)
-      };
-    };
-
-    const extraction = checkAndExtractChart(accumulatedDataRef.current);
-
-    if (extraction) {
-      try {
-        // 解析预处理后的图表数据
-
-        console.log('当前的数据长度:', extraction.chartData.length);
-        console.log('当前的数据:', extraction.chartData);
-        const parsedChartData = JSON.parse(extraction.chartData);
-
-        // 添加新的图表
-        // setCharts(prevCharts => [...prevCharts, {
-        //   id: Date.now(),
-        //   options: parsedChartData
-        // }]);
-        setCharts([{id: Date.now(),
-             options: parsedChartData}])
-
-        // 更新文本和累积数据
-        setData(prevData => prevData + extraction.remainingText);
-        accumulatedDataRef.current = extraction.remainingText;
-        setAccumulatedData(extraction.remainingText);
-      } catch (e) {
-        console.error('图表数据解析失败:', e);
-        console.error('待解析的数据:', extraction.chartData);
-        setData(prevData => prevData + newData);
+        try {
+          // 解析预处理后的图表数据
+          const parsedChartData = JSON.parse(graphData.current);
+          // 添加新的图表
+          setIsLoading(false);
+          setCharts(prevCharts => [...prevCharts, {
+            id: Date.now(),
+            options: parsedChartData
+          }]);
+          graphData.current = ''
+          // setCharts([{
+          //   id: Date.now(),
+          //   options: parsedChartData
+          // }])
+        } catch (e) {
+          console.error('图表数据解析失败:', e);
+          console.error('待解析的数据:', graphData.current);
+        }
       }
-    } else {
-      // 如果没有完整的图表数据，就更新显示文本
-        setData(prevData => prevData + newData);
     }
   };
 
@@ -233,6 +222,9 @@ function App() {
           variants={searchContainerVariants}
           initial="initial"
           animate={showResult ? "animate" : "initial"}
+          style={{
+            width: '70vw',
+          }}
         >
           <motion.input
             type="text"
@@ -248,8 +240,6 @@ function App() {
             placeholder="输入您的问题..."
             style={{
               padding: '10px',
-              border: '1px solid #ccc',
-              borderRadius: '5px',
               width: '100%',
               boxSizing: 'border-box'
             }}
@@ -281,57 +271,60 @@ function App() {
             }}
           >
             {/* 根据加载状态显示不同内容 */}
-            {isLoading ? (
-              // 加载动画
-              <motion.div
-                variants={spinnerVariants}
-                animate="animate"
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  border: '4px solid #f3f3f3',
-                  borderTop: '4px solid #007bff',
-                  borderRadius: '50%',
-                  margin: '20px auto'
-                }}
-              />
-            ) : (
-              // 结果显示
-              <motion.div
-                ref={resultRef}
-                variants={resultVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                className="result-text"
-                style={{
-                  padding: '20px',
-                  color: '#fff',
-                  overflowY: 'auto', // 添加垂直滚动条
-                  maxHeight: '100%', // 充满父容器
-                  wordBreak: 'break-word',
-                  whiteSpace: 'pre-wrap', // 保留换行符和空格
-                  scrollBehavior: 'smooth', // 平滑滚动
-                  '&::webkitscrollbar': {
-                    width: '8px'
-                  },
-                  '&::webkitscrollbartrack': {
-                    background: 'rgba(255, 255, 255, 0.1)'
-                  },
-                  '&::webkitscrollbarthumb': {
-                    background: 'rgba(255, 255, 255, 0.3)',
-                    borderRadius: '4px'
-                  }
-                }}
-              >
-                {data}
-                {charts.map(chart => (
-                  <div key={chart.id} style={{ margin: '20px 0' }}>
-                    <Chart options={chart.options} />
-                  </div>
-                ))}
-              </motion.div>
-            )}
+            <motion.div
+              variants={resultVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="result-text"
+              style={{
+                padding: '20px',
+                color: '#fff',
+                overflowY: 'auto', // 添加垂直滚动条
+                maxHeight: '100%', // 充满父容器
+                wordBreak: 'break-word',
+                whiteSpace: 'pre-wrap', // 保留换行符和空格
+                scrollBehavior: 'smooth', // 平滑滚动
+                '&::webkitscrollbar': {
+                  width: '8px'
+                },
+                '&::webkitscrollbartrack': {
+                  background: 'rgba(255, 255, 255, 0.1)'
+                },
+                '&::webkitscrollbarthumb': {
+                  background: 'rgba(255, 255, 255, 0.3)',
+                  borderRadius: '4px'
+                }
+              }}
+            >
+              <div className="reasoning">{reasoning}</div>
+              <div className="content">{content}</div>
+              {isLoading && (
+                // 加载动画
+                <motion.div
+                  variants={spinnerVariants}
+                  animate="animate"
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    border: '4px solid #f3f3f3',
+                    borderTop: '4px solid #007bff',
+                    borderRadius: '50%',
+                    margin: '20px auto'
+                  }}
+                />
+              )}
+              {charts.map(chart => (
+                <div key={chart.id} style={{ 
+                  margin: '20px 0',
+                  borderRadius: '20px',
+                  padding: '10px',
+                  border: '3px solid blue',
+                 }}>
+                  <Chart options={chart.options} />
+                </div>
+              ))}
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
