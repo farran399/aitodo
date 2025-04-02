@@ -1,23 +1,43 @@
+# 处理火山方舟API
 import os
+import description
 from volcenginesdkarkruntime import Ark
+
 client = Ark(
     api_key="b5dd48fa-f25c-4d1d-9645-a9f7ff5311f1",
     base_url="https://ark.cn-beijing.volces.com/api/v3")
 
-# 流式输出开始
-print("----- stream request -----")
-stream = client.chat.completions.create(
-    model="deepseek-r1-250120",
-    messages=[
-        {"role": "system", "content": "你是豆包，是由字节跳动开发的 AI 人工智能助手"},
-        {"role": "user", "content": "举出一种常见的十字花科植物，在十个字以内回答"},
-    ],
-    stream=True
-)
-# 分块输出回答
-for chunk in stream:
-    if not chunk.choices:
-        continue
-    print(chunk.choices[0].delta.reasoning_content, end="")
-    print(chunk.choices[0].delta.content, end="")
-print()
+# 流式响应
+def generate(input):
+    try:
+        # 使用模型doubao-1-5-pro-256k-250115\deepseek-v3-241226\ep-20250314182101-klj96动态生成
+        stream = client.chat.completions.create(
+            model="ep-20250314182101-klj96",
+            messages=[
+                {"role": "system", "content": description.v1},
+                {"role": "user", "content": input},
+            ],
+            stream=True
+        )
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            # 检查并只返回非None的reasoning_content
+            
+            if (chunk.choices[0].delta.content is not None) and (chunk.choices[0].delta.content != ''):
+                chunkContent = (chunk.choices[0].delta.content).replace('\\','\\\\')
+                chunkContent = chunkContent.replace('\n', '\\n')
+                chunkContent = chunkContent.replace('\t', '\\t')
+                chunkContent = chunkContent.replace('"', '\\"')
+                yield '''{"content":"%s","type":1}\n'''% chunkContent
+            else:
+                if (chunk.choices[0].delta.reasoning_content is not None) and (chunk.choices[0].delta.reasoning_content != ''):
+                    chunkContent = (chunk.choices[0].delta.reasoning_content).replace('\\','\\\\')
+                    chunkContent = chunkContent.replace('\n', '\\n')
+                    chunkContent = chunkContent.replace('\t', '\\t')
+                    chunkContent = chunkContent.replace('"', '\\"')
+                    yield '''{"content":"%s","type":0}\n'''% chunkContent
+    
+    except Exception as e:
+        return {'error': f'处理请求时发生错误: {str(e)}'}, 500
+                
