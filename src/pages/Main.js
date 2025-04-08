@@ -20,6 +20,7 @@ function Main() {
   const graphing = useRef(false);//是否正在读取图表数据
   const [chatData, setChatData] = useState([]);//聊天记录
   const [isNavExpanded, setIsNavExpanded] = useState(true); // 添加导航栏展开状态
+  const [chatSessionId, setChatSessionId] = useState('default');//聊天会话ID
 
   // 导航栏动画配置
   const navVariants = {
@@ -91,16 +92,29 @@ function Main() {
     try {
       // 创建响应解码器
       const decoder = new TextDecoder();
+      let response;
+      if (chatSessionId === 'default') {
 
-      const response = await fetch('http://localhost:5000/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ content: searchText, new_chat: true })
-      });
+        response = await fetch('http://localhost:5000/api/new_chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ content: searchText })
+        });
+      } else {
 
+        response = await fetch('http://localhost:5000/api/message', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ content: searchText, session_id: chatSessionId })
+        });
+
+      }
       // 发送消息
 
       setChatData([{
@@ -154,6 +168,9 @@ function Main() {
     let newData = reciveData.content;
     let type = reciveData.type;
     // 判断是否需要更新聊天ID
+    if (type ===-1 ) {
+      setChatSessionId(reciveData.content);
+    }else{
     if (type === 1 && isReasoning.current === true) {
       isReasoning.current = false;
       setChatData(prevChatData => {
@@ -241,6 +258,7 @@ function Main() {
         }
       }
     }
+  }
   };
 
   // 搜索框容器的动画配置

@@ -36,14 +36,16 @@ class Chat(db.Model):
     
     chat_session_id = db.Column(db.String(50), primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user_input = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # 建立与Message的关系
     messages = db.relationship('Message', backref='chat', lazy=True, cascade='all, delete-orphan')
     
-    def __init__(self, chat_session_id, user_id):
+    def __init__(self, chat_session_id, user_id, user_input):
         self.chat_session_id = chat_session_id
         self.user_id = user_id
+        self.user_input = user_input
     
     def __repr__(self):
         return f'<Chat {self.chat_session_id}>'
@@ -62,16 +64,16 @@ class Chat(db.Model):
 class Message(db.Model):
     __tablename__ = 'message'
     
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    message_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     chat_session_id = db.Column(db.String(50), db.ForeignKey('chat.chat_session_id'))
-    content = db.Column(db.Text, nullable=False)
-    role = db.Column(db.String(10), nullable=False)
+    message_content = db.Column(db.Text, nullable=False)
+    message_type = db.Column(db.String(10), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    def __init__(self, chat_session_id, content, role):
+    def __init__(self, chat_session_id, message_content, message_type):
         self.chat_session_id = chat_session_id
-        self.content = content
-        self.role = role
+        self.message_content = message_content
+        self.message_type = message_type
     
     def __repr__(self):
         return f'<Message {self.id}>'
