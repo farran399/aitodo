@@ -16,7 +16,7 @@ class BaseConfig(object):
     # 数据库的配置
     DIALCT = "mysql"
     DRITVER = "pymysql"
-    HOST = '127.0.0.1'
+    HOST = 'db'
     PORT = "3306"
     USERNAME = "root"
     PASSWORD = "123456"
@@ -387,4 +387,4 @@ def get_chat_by_session(current_user,session_id):
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(port=5000)
