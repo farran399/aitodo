@@ -15,7 +15,7 @@ services:
     environment:
       - MYSQL_HOST=db
       - MYSQL_USER=root
-      - MYSQL_PASSWORD=yourpassword
+      - MYSQL_PASSWORD=Aitodo816*
       - MYSQL_DB=aitodo
     depends_on:
       - db
@@ -23,10 +23,11 @@ services:
   db:
     image: mysql:5.7
     environment:
-      - MYSQL_ROOT_PASSWORD=yourpassword
+      - MYSQL_ROOT_PASSWORD=Aitodo816*
       - MYSQL_DATABASE=aitodo
     volumes:
       - db_data:/var/lib/mysql
+      - ./backend/sqlScript/create.sql:/docker-entrypoint-initdb.d/create.sql
     ports:
       - "3306:3306"
 
