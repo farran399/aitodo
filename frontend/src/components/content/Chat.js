@@ -22,10 +22,13 @@ function Chat ({ chatList }) {
                     </div>
                 )
             }
-            if (item.type === 'graph') {
+            if (item.type === 'graph') 
+                {const chartData = typeof item.content === 'string' 
+                ? JSON.parse(item.content) 
+                : item.content;
                 return (
                     <div key={item.id} >
-                        <Graph options={item.content} />
+                        <Graph options={chartData} />
                     </div>
                 )
             }

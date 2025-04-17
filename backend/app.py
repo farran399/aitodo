@@ -1,9 +1,9 @@
 # flask主程序
-from flask import Flask, jsonify, Response, request,current_app
+from flask import Flask, jsonify, Response, request, current_app
 from flask_cors import CORS
 from tools import generate_with_record  # 处理火山方舟API
 from sqlScript.sessionGenerator import SessionIDGenerator  # 雪花算法生成session_id
-from database import db,Chat,Message,Users  # 配置数据库
+from database import db, Chat, Message, Users  # 配置数据库
 from flask_sqlalchemy import SQLAlchemy  # 数据库
 import hashlib  # 用于MD5加密
 import jwt
@@ -34,7 +34,6 @@ app = Flask(__name__)
 app.config.from_object(BaseConfig)  # 配置数据库
 db.init_app(app)
 CORS(app)  # 全局启用跨域支持
-app.debug = True  # 调试模式，用于开发环境
 
 # JWT认证中间件
 
@@ -254,6 +253,8 @@ def register():
         }), 500
 
 # 新对话
+
+
 @app.route('/api/new_chat', methods=['POST'])
 @token_required
 def newchat(current_user):
@@ -264,14 +265,13 @@ def newchat(current_user):
 
         input_content = dialog['content']
         session_id = SessionIDGenerator().generate()
-        
+
         # 创建聊天记录
         chat = Chat(
             chat_session_id=session_id,
             user_id=current_user.id,
             user_input=input_content,
         )
-        
         try:
             db.session.add(chat)
             db.session.commit()
@@ -297,6 +297,8 @@ def newchat(current_user):
         }), 500
 
 # 发送消息
+
+
 @app.route('/api/message', methods=['POST'])
 @token_required
 def chat(current_user):
@@ -307,8 +309,8 @@ def chat(current_user):
 
         input_content = dialog['content']
         session_id = dialog['session_id']
-
         # 创建生成器函数并确保应用上下文
+
         def generate_stream():
             with app.app_context():
                 try:
@@ -326,16 +328,23 @@ def chat(current_user):
         }), 500
 
 # 获取聊天记录
+
+
 @app.route('/api/user_chats', methods=['GET'])
 @token_required
 def get_chat(current_user):
     try:
         # 获取当前用户的所有聊天记录
-        chats = Chat.query.filter_by(user_id=current_user.id).order_by(Chat.created_at.desc()).all()
+        chats = Chat.query.filter_by(user_id=current_user.id).order_by(
+            Chat.created_at.desc()).all()
 
-        # 转换为字典列表
-        chat_list = [chat.to_dict() for chat in chats]
-        
+        # 转换为字典列表，确保包含chat_session_id和user_input
+        chat_list = [{
+            'chat_session_id': chat.chat_session_id,
+            'user_input': chat.user_input,
+            'created_at': chat.created_at.isoformat()
+        } for chat in chats]
+
         return jsonify({
             'success': True,
             'message': '获取对话列表成功',
@@ -344,29 +353,38 @@ def get_chat(current_user):
 
     except Exception as e:
         return jsonify({
-           'success': False,
-           'message': f'服务器错误: {str(e)}'
+            'success': False,
+            'message': f'服务器错误: {str(e)}'
         }), 500
 
-@app.route('/api/chat/<session>/', methods=['GET'])
+
+@app.route('/api/chat/<session_id>', methods=['GET'])
 @token_required
-def get_chat_by_session(session):
+def get_chat_by_session(current_user,session_id):
     try:
         # 获取指定session的所有聊天记录
-        chats = Message.query.filter_by(chat_session_id=session).order_by(Message.created_at.desc()).all()
-        # 转换为字典列表
-        chat_list = [chat.to_dict() for chat in chats]
+        chats = Message.query.filter_by(chat_session_id=session_id).order_by(
+            Message.created_at.desc()).all()
+
+        chat_list = []
+        for chat in chats:
+            chat_list.append({
+                'type': chat.message_type,
+                'content': chat.message_content,
+            })
 
         return jsonify({
-           'success': True,
-           'message': '获取聊天记录成功',
+            'success': True,
+            'message': '获取聊天记录成功',
             'data': chat_list
         }), 200
 
     except Exception as e:
         return jsonify({
-          'success': False,
-          'message': f'服务器错误: {str(e)}'
+            'success': False,
+            'message': f'服务器错误: {str(e)}'
         }), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -1,0 +1,15 @@
+.history-item {
+  padding: 12px 16px;
+  margin: 4px 0;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+}
+
+.history-item:hover {
+  background-color: #e0e0e0;
+}

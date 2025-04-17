@@ -1,0 +1,16 @@
+.history-list {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  overflow-y: auto;
+  height: 80vh;
+  gap:5px;
+}
+
+.history-list-loading,
+.history-list-error,
+.history-list-empty {
+  padding: 16px;
+  text-align: center;
+  color: #666;
+}
